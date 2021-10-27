@@ -9,6 +9,7 @@ lxml = "*"
 requests = "*"
 cloudscraper = "*"
 pandas = "*"
+numpy = "*"
 
 [dev-packages]
 

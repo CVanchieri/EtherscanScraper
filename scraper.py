@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 import requests
 import cloudscraper
 import pandas as pd
+import numpy as np
 
 user_input = "0x5FFA235A2478A1e3E1b01CC1EE968Bee915351AF"
 scraper = cloudscraper.create_scraper()
@@ -49,7 +50,7 @@ for li in nft_body.find_all('li'):
         nft = {}
         hash = a['href']
         new_hash = hash.replace('/token/', '')
-        nft['hash'] = new_hash
+        nft['hash'] = hash
         name_quantity = a.div.text
         split_string = name_quantity. split(")", 1)
         name = split_string[0]+')'
@@ -61,7 +62,98 @@ for li in nft_body.find_all('li'):
 
 # create a dataframe 
 df_tokens = pd.DataFrame.from_dict(nfts, orient='index')
+# print(df_tokens.head())
+usd_floor = []
+eth_floor = []
+token_type = []
+supply = []
+holders = []
+for x in df_tokens.hash.values:
+
+    ### token scraper ###
+    token_url_main = scraper.get(f'https://etherscan.io{x}')
+
+    # if url_main.status_code == 200:
+    #     print("connected to page")
+    # else:
+    #     print("unable to fetch page")
+    # get hash overview
+    hash_scan = BeautifulSoup(token_url_main.text, 'lxml')
+    hash_title = hash_scan.title.text
+    # print("-- hash main title --")
+    # print(hash_title.strip())
+    
+    # # get hash eth balance
+    token_overview = hash_scan.find('div', id='ContentPlaceHolder1_divSummary')
+    token_card = token_overview.find('div', class_='card h-100')
+    tokentype = token_card.find('h2', class_='card-header-title').span.text
+    tokentype = tokentype.replace("[",'')
+    tokentype = tokentype.replace("]",'')
+
+    card_body = token_card.find('div', class_='card-body')
+    if card_body.find('div', class_='col-12') is None:
+        usd_floor.append(0)
+        eth_floor.append(0)
+        token_type.append(tokentype)
+
+        
+    else:
+        token_floor = card_body.find('div', class_='col-12')
+        price_floor = token_floor.find('span', class_='d-block').text #
+        split_string = price_floor. split("@", 1)
+        usd = split_string[0].strip()
+        usdfloor = usd.replace("$", '')
+        usdfloor = usdfloor.replace(",", '')
+        eth = split_string[1].strip()
+        ethsplit = eth.split(" ", 1)
+        ethfloor = ethsplit[0].strip()
+        usd_floor.append(usdfloor)
+        eth_floor.append(ethfloor)
+        token_type.append(tokentype)
+        
+    token_supply = card_body.find('div', class_='row align-items-center')
+    total_supply = token_supply.find('div', class_='col-md-8 font-weight-medium').text #
+    split_string = total_supply. split(" ", 1)
+    total_supply = split_string[0].replace(",", '')
+    total_supply = total_supply.replace(" ", '0')
+    if '.' in total_supply:
+        total_supply = total_supply[:total_supply.index('.')]
+    else:
+        total_supply = total_supply
+    df_tokens['total_supply'] = total_supply
+    token_holders = card_body.find('div', id='ContentPlaceHolder1_tr_tokenHolders')
+    total_holders = token_holders.find('div', class_='col-md-8').text.strip() #
+    if '(' in total_holders:
+        total_holders = total_holders[:total_holders.index('(')].strip()
+    else:
+        total_holders = total_holders
+    holders.append(total_holders)
+    supply.append(total_supply)
+    # print(price_floor)
+
+
+      
+
+# create a dataframe 
+df_tokens = pd.DataFrame.from_dict(nfts, orient='index')
+df_tokens['usd_floor'] = usd_floor
+
+df_tokens['eth_floor'] = eth_floor
+df_tokens['supply'] = supply
+df_tokens.supply = df_tokens.supply.replace(r'^\s*$', 0, regex=True)
+df_tokens['holders'] = holders
+df_tokens['type'] = token_type
+df_tokens = df_tokens.drop(['hash'], axis=1)
+df_tokens.usd_floor = df_tokens.usd_floor.astype(float)
+df_tokens.eth_floor = df_tokens.eth_floor.astype(float)
+df_tokens.quantity = df_tokens.quantity.astype(int)
+df_tokens['usd_holding'] = df_tokens['quantity'] * df_tokens['usd_floor']
+df_tokens['eth_holding'] = df_tokens['quantity'] * df_tokens['eth_floor']
 print(df_tokens.head())
+
+erc721 = df_tokens[df_tokens['type'] == 'ERC-721']
+# print(erc721['eth_holding'].sum())
+# print(erc721['usd_holding'].sum())
 
 ## token overview scraper ###
 url_tokens = scraper.get('https://etherscan.io/tokenholdings?a=0x5FFA235A2478A1e3E1b01CC1EE968Bee915351AF')
@@ -182,4 +274,5 @@ df_transactions.eth_value = df_transactions.eth_value.astype(float)
 df_transactions.eth_fee = df_transactions.eth_fee.astype(float)
 print(df_transactions.head())
 
-# df_transactions.to_csv('df_transactions.csv',index=False)
+df_transactions.to_csv('df_transactions.csv',index=False)
+df_tokens.to_csv('df_tokens.csv',index=False)
