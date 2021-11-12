@@ -3,19 +3,25 @@ import cloudscraper
 import pandas as pd
 import dateparser
 from IPython.display import HTML
+import time
+from datetime import datetime
 
-# hash_input = "0x5FFA235A2478A1e3E1b01CC1EE968Bee915351AF"
-# user_input = request.form['user_input']
-# user_input = user_input.replace(' ', '-')
-# user_input = user_input.replace(' ', '')
 
-### scraping song links ###
-print('--- scraping etherscan.io ---')
-user_input = "0x5FFA235A2478A1e3E1b01CC1EE968Bee915351AF"
+### start timer ###
+start = datetime.now()
+
+### scraper setup ###
+print('--- Etherscan.io Scraper ---')
+print("----------------")
+user_input = input("Enter your 'Ether' wallet address ->: ")
+user_input = user_input.replace(' ', '-')
+user_input = user_input.replace(' ', '')
+# user_input = "input"
 scraper = cloudscraper.create_scraper()
 
-
 ### hash overview scraper ###
+print('>>> pulling hash address overview')
+print("----------------")
 url_main = scraper.get(f'https://etherscan.io/address/{user_input}')
 
 # if url_main.status_code == 200:
@@ -25,14 +31,14 @@ url_main = scraper.get(f'https://etherscan.io/address/{user_input}')
 # get hash overview
 hash_scan = BeautifulSoup(url_main.text, 'lxml')
 hash_title = hash_scan.title.text.strip()
+hash_title = hash_title.replace('Address', '')
+hash_title = hash_title.replace(' | Etherscan', '')
+input_hash = hash_title.strip()
 hash_overview = {}
-print("----------------")
 print("-- wallet overview --")
-print("----------------")
 print("-- hash address --")
-hash_overview['title'] = hash_title
+hash_overview['address'] = hash_title
 print(hash_title)
-
 # get hash eth balance
 overview = hash_scan.find('div', class_='row mb-4')
 body = overview.find('div', class_='card-body')
@@ -41,21 +47,22 @@ hash_eth_balance = balance_eth.text
 split_string = hash_eth_balance. split(":", 1)
 eth_balance = split_string[1].strip()
 print("-- eth balance --")
-hash_overview['eth_balance'] = eth_balance
-print(eth_balance)
-
+hash_overview['eth balance'] = eth_balance
+print(f'{eth_balance}')
 # get hash usd balance
 balance_usd = body.select_one('div:nth-child(3)')
 hash_usd_balance = balance_usd.text
 split_string = hash_usd_balance. split(":", 1)
 usd_balance = split_string[1].strip()
 print("-- usd balance --")
-hash_overview['usd_balance'] = usd_balance
-print(usd_balance)
+hash_overview['usd balance'] = usd_balance
+print(f'{usd_balance}')
+print("----------------")
 
-### token/nft scraper ###
+### wallet scraper ###
+print('>>> pulling wallet assets')
+print("----------------")
 nft_body = body.find('ul', class_='list list-unstyled mb-0')
-
 nfts = {}
 nft_count = 0
 for li in nft_body.find_all('li'):
@@ -73,43 +80,43 @@ for li in nft_body.find_all('li'):
         nft_count = nft_count + 1
         nfts[nft_count] = nft
 
-# create a dataframe 
+### create nfts dataframe ###
 df_nfts = pd.DataFrame.from_dict(nfts, orient='index')
-# print(df_nfts.head())
 usd_floor = []
 eth_floor = []
 token_type = []
 supply = []
 holders = []
+print('*** 5s pause ***')
+print("----------------")
+time.sleep(5)
+print('>>> pulling wallet assets information')
+print('>>> takes a few seconds')
+print("----------------")
+
+### token scraper ###
 for x in df_nfts.hash.values:
-
-    ### token scraper ###
     token_url_main = scraper.get(f'https://etherscan.io{x}')
-
+    time.sleep(1)
     # if url_main.status_code == 200:
     #     print("connected to page")
     # else:
     #     print("unable to fetch page")
-    # get hash overview
+    # get wallet overview
     hash_scan = BeautifulSoup(token_url_main.text, 'lxml')
     hash_title = hash_scan.title.text
-    # print("-- hash main title --")
-    # print(hash_title.strip())
-    
-    # # get hash eth balance
+    # # get wallet balances
     token_overview = hash_scan.find('div', id='ContentPlaceHolder1_divSummary')
     token_card = token_overview.find('div', class_='card h-100')
     tokentype = token_card.find('h2', class_='card-header-title').span.text
     tokentype = tokentype.replace("[",'')
     tokentype = tokentype.replace("]",'')
-
     card_body = token_card.find('div', class_='card-body')
     if card_body.find('div', class_='col-12') is None:
         usd_floor.append(0)
         eth_floor.append(0)
         token_type.append(tokentype)
 
-        
     else:
         token_floor = card_body.find('div', class_='col-12')
         price_floor = token_floor.find('span', class_='d-block').text #
@@ -142,12 +149,8 @@ for x in df_nfts.hash.values:
         total_holders = total_holders
     holders.append(total_holders)
     supply.append(total_supply)
-    # print(price_floor)
 
-# create a dataframe 
-df_nfts = pd.DataFrame.from_dict(nfts, orient='index')
 df_nfts['usd_floor'] = usd_floor
-
 df_nfts['eth_floor'] = eth_floor
 df_nfts['supply'] = supply
 df_nfts.supply = df_nfts.supply.replace(r'^\s*$', 0, regex=True)
@@ -162,61 +165,67 @@ df_nfts['eth_holding'] = df_nfts['quantity'] * df_nfts['eth_floor']
 eth_sum = df_nfts['eth_holding'].sum()
 usd_sum = df_nfts['usd_holding'].sum()
 nfts_table = HTML(df_nfts.to_html(classes='table table-striped'))
-print("----------------")
-print("-- wallet assets --")
-print("----------------")
-print('-- eth total --')
-print(eth_sum)
-print('-- usd total --')
-print(usd_sum)
-print(df_nfts.head(50))
 nft_types = []
 for x in df_nfts.type.unique():
-    nft_types.append(x)
-    
+    nft_types.append(x) 
+print('-- assets types --')    
 print(nft_types)
+print('-- eth total --')
+print(f'{eth_sum} eth')
+print('-- usd total --')
+print(f'${usd_sum}')
+print(df_nfts.head(50))
+
+### create assets dictionary  ###
 dict_types = {}
 for x in nft_types:
     df_type = df_nfts[df_nfts['type'] == x]
     dict_types[x] = df_type
     
-type_values = {}
+assets_type_values = {}
 for k, v in dict_types.items():
     df = pd.DataFrame.from_dict(dict_types[k])
     df['usd_holding'] = df['quantity'] * df['usd_floor']
     df['eth_holding'] = df['quantity'] * df['eth_floor']
     eth_sum = df['eth_holding'].sum()
     usd_sum = df['usd_holding'].sum()
-    type_values[k] = [f'eth total:  {eth_sum}', f'usd total:  {usd_sum}']
+    assets_type_values[k] = [f'eth total:  {eth_sum}', f'usd total:  {usd_sum}']
     
-for k, v in type_values.items():
-    print(f'-- {k} tokens --')
+for k, v in assets_type_values.items():
     print("----------------")
-    print(v[0])
-    print(v[1])
-
-# create dictionary
+    print(f'-- {k} tokens --')
+    v[0] = v[0].replace('eth total:  ', '')
+    print(f'{v[0]} eth')
+    v[1] = v[1].replace('usd total:  ', '')
+    print(f'${v[1]}')
+    
+### create nft dictionary ###
 nfts_overview = {}
-nft_list = nft_types # enter type of tokens wanted
+# nft_list = nft_types
+nft_list = ['ERC-721'] # enter type of tokens wanted
 nfttoken = df_nfts[df_nfts['type'].isin(nft_list)]
 nft_eth_sum = nfttoken['eth_holding'].sum()
-nfts_overview['eth_sum'] = nft_eth_sum
+nfts_overview['eth total'] = nft_eth_sum
 nft_usd_sum = nfttoken['usd_holding'].sum()
-nfts_overview['usd_sum'] = nft_usd_sum
+nfts_overview['usd total'] = nft_usd_sum
 nfttoken = nfttoken.reset_index(drop=True)
 index_list = [] # enter 'index' of unwanted assets
 nfttoken = nfttoken.drop(index_list)
 print("----------------")
-print(f'-- {nft_list} - assets --')
-print("----------------")
+print(f'-- {nft_list} assets --')
 print('-- eth total --')
-print(nft_eth_sum)
+print(f'{nft_eth_sum} eth')
 print('-- usd total --')
-print(nft_usd_sum)
+print(f'${nft_usd_sum}')
 print(nfttoken.head(50))
+print("----------------")
 
-# token overview scraper ###
-url_tokens = scraper.get('https://etherscan.io/tokenholdings?a=0x5FFA235A2478A1e3E1b01CC1EE968Bee915351AF')
+### coins overview scraper ###
+print('*** 5s pause ***')
+print("----------------")
+time.sleep(5)
+print('>>> pulling coins information')
+url_tokens = scraper.get(f'https://etherscan.io/tokenholdings?a={input_hash}')
 
 # if url_tokens.status_code == 200:
 #     print("connected to page")
@@ -225,18 +234,15 @@ url_tokens = scraper.get('https://etherscan.io/tokenholdings?a=0x5FFA235A2478A1e
 # get token overview
 token_scan = BeautifulSoup(url_tokens.text, 'lxml')
 token_title = token_scan.title.text
-
 # get token usd balance
 tokens_overview = token_scan.find('div', class_='wrapper')
 token_body = tokens_overview.find('main', id='content')
 token_overview = token_body.find('div', class_='container space-bottom-2')
 token_usd_networth = token_overview.find('div', class_='row mx-gutters-md-2').div
-
 # get token assets
 token_asssets_overview = token_overview.find('div', id='assets-wallet')
 print("----------------")
 print("-- coin assets --")
-print("----------------")
 token_assets_total = token_asssets_overview.h2.text
 print(token_assets_total)
 # get token assets card
@@ -257,36 +263,38 @@ for td in token_asssets_table.find_all('tr'):
     token['usd_value'] = token_usdvalue
     tokens[token_name] = token
     token_count = token_count + 1
-# print(tokens)
 df_coins = pd.DataFrame.from_dict(tokens, orient='index')
 coins_table = HTML(df_coins.to_html(classes='table table-striped'))
-print("----------------")
-print(df_coins.head())
 
-# create dictionary
+# create coins dictionary
 coins_overview = {}
-print("-- usd total networth --")
+# get coins eth balance
+token_eth_networth = token_overview.find('div', class_='col-md col-md-auto u-ver-divider u-ver-divider--left u-ver-divider--none-md mb-md-4').div
+eth_networth_total = token_eth_networth.text
+eth_total = eth_networth_total.strip()
+print("-- eth total --")
+coins_overview['eth_total'] = eth_total
+print(f'{eth_total} eth')
+# get coins usd balance
 token_usd_networth_total = token_usd_networth.text
 split_string = token_usd_networth_total. split("$", 1)
 usd_networth_total = '$' + split_string[1]
 usd_total = usd_networth_total.strip()
 coins_overview['usd_total'] = usd_total
+print("-- usd total --")
 print(usd_total)
-
-# get token eth balance
-token_eth_networth = token_overview.find('div', class_='col-md col-md-auto u-ver-divider u-ver-divider--left u-ver-divider--none-md mb-md-4').div
-print("-- eth total networth --")
-eth_networth_total = token_eth_networth.text
-eth_total = eth_networth_total.strip()
-coins_overview['eth_total'] = eth_total
-print(eth_total)
+print(df_coins.head())
+print("----------------")
 
 ### hash transaction scraper ###
 page_count = 0
 transaction_count = 0
 transactions = {}
+print('>>> pulling transactions information')
+print("----------------")
 while page_count >= 0:
-    url_transactions = scraper.get(f'https://etherscan.io/txs?a=0x5FFA235A2478A1e3E1b01CC1EE968Bee915351AF&p={page_count}')
+    time.sleep(1)
+    url_transactions = scraper.get(f'https://etherscan.io/txs?a={input_hash}&p={page_count}')
 
     # get transactions overview
     hash_transactions = BeautifulSoup(url_transactions.text, 'lxml')
@@ -346,11 +354,10 @@ df_transactions['date'] = trans_dates
 df_transactions = df_transactions.drop(columns='age')
 df_transactions.direction = df_transactions.direction.replace('\xa0IN\xa0', 'IN')
 trans_table = HTML(df_transactions.to_html(classes='table table-striped'))
-print("----------------")
 print('-- all transactions --')
-print("----------------")
 print(df_transactions.shape)
 print(df_transactions.head())
+print("----------------")
 print(f'number of transaction pages #{page_count}')
 print(f'number of transactions total #{transaction_count}')
 print("----------------")
@@ -360,20 +367,20 @@ direct_out = df_transactions[df_transactions['direction'] == 'OUT']
 direct_in = df_transactions[df_transactions['direction'] == 'IN']
 direct_self = df_transactions[df_transactions['direction'] == 'SELF']
 trans_direction = {}
+print('-- transactions metrics --')
 print('-- eth spent --')
 trans_eth_spent = direct_out['eth_value'].sum()
 trans_direction['eth_spent'] = trans_eth_spent
-print(trans_eth_spent)
-
+print(f'{trans_eth_spent} eth')
 print('-- gas spent --')
 trans_gas_spent = df_transactions.eth_fee.sum()
 trans_direction['gas_spent'] = trans_gas_spent
-print(trans_gas_spent)
-
+print(f'{trans_gas_spent} eth')
 print('-- eth purchased --')
 trans_eth_purchased = direct_in['eth_value'].sum()
 trans_direction['eth_purchased'] = trans_eth_purchased
-print(trans_eth_purchased)
+print(f'{trans_eth_purchased} eth')
+print("----------------")
 
-# df_transactions.to_csv('df_transactions.csv',index=False)
-# df_nfts.to_csv('df_nfts.csv',index=False)
+df_transactions.to_csv('df_transactions.csv',index=False)
+df_nfts.to_csv('df_nfts.csv',index=False)
