@@ -11,6 +11,9 @@ from datetime import datetime
 start = datetime.now()
 
 ### scraper setup ###
+print(" ")
+print(" ")
+print(" ")
 print('--- Etherscan.io Scraper ---')
 print("----------------")
 user_input = input("Enter your 'Ether' wallet address ->: ")
